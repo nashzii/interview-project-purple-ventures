@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Interview, InterviewDocument } from './interview.schema';
@@ -35,8 +39,12 @@ export class InterviewService {
   async createInterview(
     createInterview: CreateInterviewDto,
   ): Promise<Interview> {
-    const newInterview = new this.interviewModel(createInterview);
-    return (await newInterview.save()).populate('createBy');
+    try {
+      const newInterview = new this.interviewModel(createInterview);
+      return (await newInterview.save()).populate('createBy');
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
+    }
   }
 
   async editInterview(
@@ -78,21 +86,25 @@ export class InterviewService {
     interviewId: string,
     addComment: AddCommentDto,
   ): Promise<Interview> {
-    const interview = await this.interviewModel.findById(interviewId);
+    try {
+      const interview = await this.interviewModel.findById(interviewId);
 
-    if (!interview) {
-      throw new NotFoundException('Interview not found');
+      if (!interview) {
+        throw new NotFoundException('Interview not found');
+      }
+      const newComment = new this.commentModel({
+        content: addComment.content,
+        author: addComment.anthor,
+      });
+
+      await newComment.save();
+
+      interview.comments.push(newComment._id);
+      await interview.save();
+
+      return (await interview.populate('createBy')).populate('comments');
+    } catch (error) {
+      throw new InternalServerErrorException(error.message);
     }
-    const newComment = new this.commentModel({
-      content: addComment.content,
-      author: addComment.anthor,
-    });
-
-    await newComment.save();
-
-    interview.comments.push(newComment._id);
-    await interview.save();
-
-    return (await interview.populate('createBy')).populate('comments');
   }
 }
